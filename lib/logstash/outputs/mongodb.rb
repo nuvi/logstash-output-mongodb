@@ -21,11 +21,6 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   # select a collection based on data in the event.
   config :collection, :validate => :string, :required => false
 
-  # If true, store the @timestamp field in MongoDB as an ISODate type instead
-  # of an ISO8601 string.  For more information about this, see
-  # http://www.mongodb.org/display/DOCS/Dates.
-  config :isodate, :validate => :boolean, :default => false
-
   # The number of seconds to wait after failure before retrying.
   config :retry_delay, :validate => :number, :default => 3, :required => false
 
@@ -48,24 +43,29 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
       document = {}.merge(event.to_hash)
 
       # Need to convert plain string values to respective Object Types
-      document['post_created_at'] = DateTime.parse(document['post_created_at']).to_bson
+      puts document['post_created_at'] 
+      document['post_created_at'] = DateTime.parse(document['post_created_at'])
 
-      document['keywords'].each do |keyword|
-        keyword.gsub!("$", "\\u0024") if keyword.start_with?("$")
-        keyword.gsub!(".", "\\u002e") if keyword.start_with?(".")
+      document["_id"] = "#{document["network"]}-#{document["social_source_uid"]}" 
+
+      document["social_monitor_sources"].each do |doc|
+        if doc["company_uid"].empty?
+          puts document
+        end
+
+        unless doc['keywords'].nil?
+          doc['keywords'].each do |keyword|
+            keyword[0].gsub!("$", "\\u0024") if keyword[0].start_with?("$")
+            keyword[0].gsub!(".", "\\u002e") if keyword[0].start_with?(".")
+          end
+        end
+
+        @db.use(doc["company_uid"])[event.sprintf(doc["monitor_uid"])].insert_one(document)
+        @db.use(doc["company_uid"])[event.sprintf(doc["monitor_uid"])].indexes.create_one({"post_created_at" => 1})
       end
-    
-      if !@isodate
-        # not using timestamp.to_bson
-        document["@timestamp"] = event.timestamp.to_json
-      end
-      if @generateId
-        document["_id"] = BSON::ObjectId.new(nil, event.timestamp)
-      end
-      document["social_monitor_sources"].each do |e|
-        @db.use(e["company_uid"])[event.sprintf(e["monitor_uid"])].insert_one(document)
-      end
+
     rescue => e
+      p e.to_json
       @logger.warn("Failed to send event to MongoDB", :event => event, :exception => e,
                    :backtrace => e.backtrace)
     end
