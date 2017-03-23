@@ -15,11 +15,11 @@ class LogStash::Outputs::Mongodb < LogStash::Outputs::Base
   config :uri, :validate => :string, :required => true
 
   # The database to use.
-  config :database, :validate => :string, :required => true
+  config :database, :validate => :string, :required => false
 
   # The collection to use. This value can use `%{foo}` values to dynamically
   # select a collection based on data in the event.
-  config :collection, :validate => :string, :required => true
+  config :collection, :validate => :string, :required => false
 
   # If true, store the @timestamp field in MongoDB as an ISODate type instead
   # of an ISO8601 string.  For more information about this, see
